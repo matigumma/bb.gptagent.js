@@ -8,7 +8,7 @@ import { OpenAIChatMessage } from "../ai/openai/createChatCompletion";
 
 const log = console.log;
 
-export class CLIAgentRunObserver implements AgentRunObserver {
+export class ConsoleAgentRunObserver implements AgentRunObserver {
   private readonly resultFormatters: ResultFormatterRegistry;
 
   constructor({
@@ -21,7 +21,7 @@ export class CLIAgentRunObserver implements AgentRunObserver {
 
   onAgentRunStarted({ run }: { run: AgentRun }) {
     log(chalk.green(`### ${run.agent.name} ###`));
-    log(run.task);
+    log(run.objective);
     log();
   }
 
@@ -49,14 +49,9 @@ export class CLIAgentRunObserver implements AgentRunObserver {
     }
   }
 
-  onStepExecutionFinished({
-    step,
-    result,
-  }: {
-    step: Step;
-    result: StepResult;
-  }) {
+  onStepExecutionFinished({ step }: { step: Step }) {
     if (step instanceof ToolStep) {
+      const result = step.state;
       const resultType = result.type;
 
       switch (resultType) {
@@ -88,6 +83,12 @@ export class CLIAgentRunObserver implements AgentRunObserver {
         case "failed": {
           log(chalk.red(`ERROR: ${result.error}`));
           log();
+          break;
+        }
+
+        case "pending":
+        case "running": {
+          // ignored
           break;
         }
 

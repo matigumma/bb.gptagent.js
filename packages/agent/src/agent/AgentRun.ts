@@ -2,72 +2,98 @@ import { OpenAIChatMessage } from "../ai/openai/createChatCompletion";
 import { AbortController } from "../step/AbortController";
 import { Step } from "../step/Step";
 import { StepResult } from "../step/StepResult";
+import { createNextId } from "../util/createNextId";
 import { Agent } from "./Agent";
 import { AgentRunObserver } from "./AgentRunObserver";
 
 export class AgentRun {
   private readonly observer?: AgentRunObserver;
+  private readonly nextId = createNextId(1);
 
   readonly agent: Agent;
   readonly controller: AbortController;
-  readonly task: string;
+  readonly objective: string;
 
   constructor({
     agent,
     controller,
     observer,
-    task,
+    objective,
   }: {
     agent: Agent;
     controller: AbortController;
     observer?: AgentRunObserver;
-    task: string;
+    objective: string;
   }) {
     this.agent = agent;
     this.controller = controller;
     this.observer = observer;
-    this.task = task;
+    this.objective = objective;
+  }
+
+  generateId({ type }: { type: string }) {
+    return `${this.nextId()}-${type}`;
   }
 
   isAborted() {
     return this.controller.isRunAborted();
   }
 
-  async executeStep(step: Step): Promise<StepResult> {
-    if (this.isAborted()) {
-      return { type: "aborted" };
-    }
+  private logError(error: unknown) {
+    console.error(error); // TODO logger
+  }
 
+  onLoopIterationStarted({ loop }: { loop: Step }) {
     try {
-      this.observer?.onStepExecutionStarted({ run: this, step });
+      this.observer?.onLoopIterationStarted?.({ run: this, loop });
     } catch (error) {
-      console.error(error); // TODO logger
+      this.logError(error);
     }
+  }
 
-    const result = await step.run(this);
-
+  onLoopIterationFinished({ loop }: { loop: Step }) {
     try {
-      this.observer?.onStepExecutionFinished({ run: this, step, result });
+      this.observer?.onLoopIterationFinished?.({ run: this, loop });
     } catch (error) {
-      console.error(error); // TODO logger
+      this.logError(error);
     }
+  }
 
-    return result;
+  onStepExecutionStarted({ step }: { step: Step }) {
+    try {
+      this.observer?.onStepExecutionStarted?.({ run: this, step });
+    } catch (error) {
+      this.logError(error);
+    }
+  }
+
+  onStepExecutionFinished({
+    step,
+    result,
+  }: {
+    step: Step;
+    result: StepResult;
+  }) {
+    try {
+      this.observer?.onStepExecutionFinished?.({ run: this, step });
+    } catch (error) {
+      this.logError(error);
+    }
   }
 
   onStart() {
     try {
-      this.observer?.onAgentRunStarted({ run: this });
+      this.observer?.onAgentRunStarted?.({ run: this });
     } catch (error) {
-      console.error(error); // TODO logger
+      this.logError(error);
     }
   }
 
   onFinish({ result }: { result: StepResult }) {
     try {
-      this.observer?.onAgentRunFinished({ run: this, result });
+      this.observer?.onAgentRunFinished?.({ run: this, result });
     } catch (error) {
-      console.error(error); // TODO logger
+      this.logError(error);
     }
   }
 
@@ -77,9 +103,9 @@ export class AgentRun {
     messages: Array<OpenAIChatMessage>;
   }) {
     try {
-      this.observer?.onStepGenerationStarted({ run: this, messages });
+      this.observer?.onStepGenerationStarted?.({ run: this, messages });
     } catch (error: any) {
-      console.error(error); //TODO logger
+      this.logError(error);
     }
   }
 
@@ -91,13 +117,13 @@ export class AgentRun {
     step: Step;
   }) {
     try {
-      this.observer?.onStepGenerationFinished({
+      this.observer?.onStepGenerationFinished?.({
         run: this,
         generatedText,
         step,
       });
     } catch (error: any) {
-      console.error(error); //TODO logger
+      this.logError(error);
     }
   }
 }
