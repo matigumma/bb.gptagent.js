@@ -1,25 +1,19 @@
-import zod from "zod";
-import { ResultFormatter } from "../action/ResultFormatter";
 import { OpenAIChatMessage } from "../ai/openai";
 import { Step } from "../step";
+import { ToolStep } from "../tool/ToolStep";
 import { Prompt } from "./Prompt";
-import { ResultFormatterRegistry } from "../action/ResultFormatterRegistry";
 
 export class RecentStepsPrompt
   implements Prompt<{ completedSteps: Array<Step> }>
 {
   readonly maxSteps: number;
-  readonly resultFormatters: ResultFormatterRegistry;
 
   constructor({
     maxSteps = 10,
-    resultFormatters = new ResultFormatterRegistry(),
   }: {
     maxSteps?: number;
-    resultFormatters?: ResultFormatterRegistry;
   } = {}) {
     this.maxSteps = maxSteps;
-    this.resultFormatters = resultFormatters;
   }
 
   async generatePrompt({
@@ -50,21 +44,14 @@ export class RecentStepsPrompt
           break;
         }
         case "succeeded": {
-          if (stepState.output == null) {
+          if (step instanceof ToolStep) {
+            content = step.action.formatResult({
+              input: stepState.input,
+              output: stepState.output,
+              summary: stepState.summary,
+            });
             break;
           }
-
-          const resultFormatter = this.resultFormatters.getFormatter(step.type);
-
-          if (resultFormatter == null) {
-            content = JSON.stringify(stepState.output);
-            break;
-          }
-
-          content = this.formatOutput({
-            resultFormatter,
-            result: stepState,
-          });
         }
       }
 
@@ -77,27 +64,5 @@ export class RecentStepsPrompt
     }
 
     return messages;
-  }
-
-  private formatOutput<OUTPUT>({
-    resultFormatter,
-    result,
-  }: {
-    result: unknown;
-    resultFormatter: ResultFormatter<OUTPUT>;
-  }) {
-    const schema = zod.object({
-      output: resultFormatter.outputSchema,
-      summary: zod.string(),
-    });
-
-    const parsedResult = schema.parse(result);
-
-    return resultFormatter.formatResult({
-      result: {
-        summary: parsedResult.summary,
-        output: parsedResult.output as any, // TODO fix type issue
-      },
-    });
   }
 }
